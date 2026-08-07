@@ -6745,17 +6745,31 @@ export interface Page<T> {
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 const TOKEN_KEY = 'localhostfacom.token';
 
-/** Mirrors the RFC 7807 problem+json body the API returns. */
+/**
+ * Mirrors the RFC 7807 problem+json body the API returns. Written with explicit field
+ * declarations rather than TS constructor parameter properties — this project's
+ * tsconfig has `erasableSyntaxOnly` set, which forbids the shorthand because it emits
+ * runtime assignments the flag is designed to reject.
+ */
 export class ApiError extends Error {
+  status: number;
+  slug: string;
+  fieldErrors?: Record<string, string>;
+  orderId?: string;
+
   constructor(
-    readonly status: number,
-    readonly slug: string,
+    status: number,
+    slug: string,
     message: string,
-    readonly fieldErrors?: Record<string, string>,
-    readonly orderId?: string,
+    fieldErrors?: Record<string, string>,
+    orderId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.slug = slug;
+    this.fieldErrors = fieldErrors;
+    this.orderId = orderId;
   }
 }
 
@@ -7092,6 +7106,20 @@ VITE_API_URL=
 
 Run: `cd ui && npm install && npm run build && npm run lint`
 Expected: both succeed. `tsc -b` type-checks every file in `src/api/` against `types.ts`.
+
+**Deviations hit on first run, already applied to this document:**
+1. Making `crowdfundingUrl` and `topProduct` nullable (matching the real API response)
+   breaks two pre-existing, non-optional-chained usages in `ui/src/pages/PublicDashboard.tsx`:
+   the crowdfunding link's `href` and the top-product `title`/text. Fixed with `?? undefined`
+   (href) and `?? '—'` (display text) — small, targeted, not a rewrite of that page.
+2. `ui/src/pages/PublicDashboard.tsx`'s Recharts `<Tooltip formatter>` had a pre-existing
+   type error (`(value: number) => ...` doesn't match Recharts v3's
+   `(value: ValueType | undefined) => ...` signature) — present on the branch before this
+   task touched anything, confirmed via `git stash`. It blocks `tsc -b` regardless, so it
+   was fixed in the same commit: `(value) => [formatCurrency(Number(value)), 'Arrecadado']`.
+3. `ui/src/pages/admin/AdminLayout.tsx` has 2 pre-existing `react-hooks/static-components`
+   lint errors, untouched by this task and unrelated to the API client. `npm run lint`
+   will still report them — that's expected, not a regression from this task.
 
 - [ ] **Step 6: Commit**
 
