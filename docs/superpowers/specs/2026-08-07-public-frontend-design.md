@@ -163,6 +163,11 @@ terminal state with a link back to the catalog). The countdown is display-only: 
 whatever the API says it is, never a client-side `setTimeout`. The existing mockup's
 10-minute timer can fire while a payment is genuinely in flight and is dropped.
 
+Polling every 3 seconds is deliberately more frequent than the server's own 10-second
+provider-sync throttle. Extra polls are cheap reads of the order row and cost no provider
+call, and the tighter interval means the screen reacts within a few seconds of the status
+actually flipping rather than waiting out a full sync window.
+
 ### `/confirmacao/:orderId` — Confirmation
 
 Confirms payment and shows the itemized receipt, then clears the cart.
@@ -195,9 +200,9 @@ maps known slugs to Portuguese user-facing messages, falling back to a generic m
 for anything unmapped — an unrecognized slug must never render a raw English backend
 string to a customer.
 
-Every screen renders one of four states explicitly: loading, empty, error with retry, or
-content. `StateView` exists so this is uniform rather than reinvented per screen. The
-current mockups have none of these states.
+Every screen resolves to one of four states: loading, empty, error with retry, or content.
+`StateView` renders the first three so they are uniform rather than reinvented per screen;
+content is the screen's own markup. The current mockups have none of these states.
 
 Failures that matter and how they surface:
 
@@ -224,9 +229,16 @@ Verification per task:
    `playwright-firefox` skill — this machine has Firefox only.
 
 The full customer path is exercised end to end at least once: catalog, add items, create
-order, PIX screen, mark the order paid out of band, confirm the poll advances to the
-confirmation screen, and confirm the sale appears on the dashboard at `/`. The `fake` payment
-provider makes this runnable with no Mercado Pago credentials.
+order, PIX screen, wait for confirmation, land on the receipt, and see the sale appear on
+the dashboard at `/`.
+
+No manual step or admin action is needed to make the payment succeed. `FakePaymentProvider`
+reports `PENDING` until `app.payments.fake.auto-confirm-after` elapses (`PT10S` in
+`application.yaml`) and `APPROVED` after that, and `GET /api/public/orders/{id}/status`
+syncs with the provider itself — throttled to once per 10 seconds per order — so the
+screen's own polling is what advances the order to `PAID`. The scheduled reconciler is a
+fallback, not a required part of the smoke check. This also means the payment screen's
+polling is exercised for real rather than simulated.
 
 ## Risks
 
