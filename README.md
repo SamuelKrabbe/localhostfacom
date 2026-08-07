@@ -31,35 +31,58 @@ O cliente escaneia um QR Code fixo na sala, monta o pedido e paga via PIX; o pag
 
 ### Pré-requisitos
 
-- Java 25+ e Maven
+- Java 25+
 - Node.js 24+
-- PostgreSQL
+- Podman ou Docker (Postgres e MinIO sobem via compose)
+
+### Infraestrutura
+
+```bash
+podman compose up -d
+```
 
 ### Backend
 
 ```bash
-cd backend
-cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
-# preencher credenciais do banco e do Mercado Pago
-./mvnw spring-boot:run
+cd api
+APP_BOOTSTRAP_ADMIN_EMAIL=admin@localhost.facom \
+APP_BOOTSTRAP_ADMIN_PASSWORD=troque-esta-senha \
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
+
+O perfil `dev` usa o provedor de pagamento `fake`, que confirma qualquer cobrança
+após 10 segundos — dá para rodar o fluxo inteiro sem credenciais do Mercado Pago.
 
 ### Frontend
 
 ```bash
-cd frontend
-cp .env.example .env
-# preencher URL da API
+cd ui
 npm install
 npm run dev
 ```
+
+O Vite faz proxy de `/api` para `localhost:8080`, então não é preciso configurar
+`VITE_API_URL` em desenvolvimento.
+
+### Rotas
+
+| Rota | Tela |
+|---|---|
+| `/` | Portal de transparência |
+| `/cardapio` | Cardápio e carrinho |
+| `/pagamento/:orderId` | Pagamento PIX |
+| `/confirmacao/:orderId` | Confirmação do pedido |
+
+> O QR Code fixo da sala precisa apontar para `/cardapio`, e não para a raiz —
+> a raiz é o portal de transparência.
 
 ## Estrutura do repositório
 
 ```
 .
-├── backend/     # API Spring Boot
-├── frontend/    # Aplicação React
+├── api/     # API Spring Boot
+├── ui/      # Aplicação React
+├── docs/    # Especificações e planos de implementação
 └── README.md
 ```
 
