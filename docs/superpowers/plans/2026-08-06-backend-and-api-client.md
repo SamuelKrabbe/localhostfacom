@@ -6093,6 +6093,8 @@ git commit -m "feat(api): add expense tracking and fundraising goal settings"
 ```java
 package com.example.localhostfacom.dashboard;
 
+import com.example.localhostfacom.admin.Admin;
+import com.example.localhostfacom.admin.AdminRepository;
 import com.example.localhostfacom.dashboard.dto.DashboardResponse;
 import com.example.localhostfacom.expense.ExpenseRepository;
 import com.example.localhostfacom.expense.ExpenseService;
@@ -6127,18 +6129,22 @@ class DashboardServiceTest {
     @Autowired private ExpenseService expenses;
     @Autowired private ExpenseRepository expenseRepository;
     @Autowired private SettingsService settings;
+    @Autowired private AdminRepository adminRepository;
 
     private Product coffee;
     private Product cake;
+    private UUID adminId;
 
     @BeforeEach
     void setUp() {
         orders.deleteAll();
         products.deleteAll();
         expenseRepository.deleteAll();
+        adminRepository.deleteAll();
         settings.update(new BigDecimal("2000.00"), "https://vakinha.example/sala");
         coffee = productService.create("Café", new BigDecimal("3.00"), null);
         cake = productService.create("Bolo", new BigDecimal("5.00"), null);
+        adminId = adminRepository.save(Admin.create("owner@example.com", "hash")).getId();
     }
 
     private void paidOrder(Product product, int quantity) {
@@ -6188,7 +6194,7 @@ class DashboardServiceTest {
     @Test
     void subtractsExpensesFromTheNetBalance() {
         paidOrder(coffee, 10);
-        expenses.create("Insumos", new BigDecimal("12.00"), LocalDate.now(), UUID.randomUUID());
+        expenses.create("Insumos", new BigDecimal("12.00"), LocalDate.now(), adminId);
 
         DashboardResponse result = dashboard.build(0, 20);
 
@@ -6202,7 +6208,7 @@ class DashboardServiceTest {
     @Test
     void reportsANegativeBalanceWhenExpensesExceedRevenue() {
         paidOrder(coffee, 1);
-        expenses.create("Estoque inicial", new BigDecimal("100.00"), LocalDate.now(), UUID.randomUUID());
+        expenses.create("Estoque inicial", new BigDecimal("100.00"), LocalDate.now(), adminId);
 
         DashboardResponse result = dashboard.build(0, 20);
 
@@ -6262,7 +6268,9 @@ class DashboardServiceTest {
 Run: `cd api && ./mvnw test -Dtest=DashboardServiceTest`
 Expected: FAIL — `DashboardService` does not exist.
 
-- [ ] **Step 3: Extend the repository**
+- [x] **Step 3: Extend the repository** — already done in Task 2 (see that task's
+  deliberate-reordering note); these queries already exist in `OrderRepository.java`.
+  Skip this step when executing.
 
 Add to `order/OrderRepository.java`:
 
