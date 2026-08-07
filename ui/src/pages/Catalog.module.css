@@ -1,0 +1,27 @@
+.page {
+  max-width: var(--width-content);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+  /* Room for the fixed cart bar so the last product is never trapped underneath. */
+  padding-bottom: var(--space-8);
+}
+
+.intro {
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppHeader } from './components/AppHeader';
 import { CartProvider } from './cart/CartProvider';
+import { Catalog } from './pages/Catalog';
 import { PublicDashboard } from './pages/PublicDashboard';
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
         <AppHeader />
         <Routes>
           <Route path="/" element={<PublicDashboard />} />
+          <Route path="/cardapio" element={<Catalog />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

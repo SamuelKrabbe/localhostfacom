@@ -1,28 +1,40 @@
+import { Money } from './Money';
+import styles from './CartBar.module.css';
+
 interface CartBarProps {
   totalItems: number;
   totalPrice: number;
+  isSubmitting: boolean;
+  error: string | null;
   onCheckout: () => void;
-  isLoading: boolean;
 }
 
-export function CartBar({ totalItems, totalPrice, onCheckout, isLoading }: CartBarProps) {
-  if (totalItems === 0) return null;
+export function CartBar({ totalItems, totalPrice, isSubmitting, error, onCheckout }: CartBarProps) {
+  if (totalItems === 0) {
+    return null;
+  }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
-      <div className="max-w-md mx-auto flex items-center justify-between">
+    <div className={styles.bar}>
+      {error ? (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className={styles.inner}>
         <div>
-          <p className="text-sm text-gray-600">{totalItems} {totalItems === 1 ? 'item' : 'itens'}</p>
-          <p className="text-lg font-semibold text-gray-900">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice)}
+          <p className={styles.count}>
+            {totalItems} {totalItems === 1 ? 'item' : 'itens'}
           </p>
+          <Money value={totalPrice} size="lg" />
         </div>
         <button
+          type="button"
+          className={styles.checkout}
           onClick={onCheckout}
-          disabled={isLoading}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-70 flex items-center"
+          disabled={isSubmitting}
         >
-          {isLoading ? 'Processando...' : 'Finalizar pedido'}
+          {isSubmitting ? 'Gerando cobrança...' : 'Pagar com PIX'}
         </button>
       </div>
     </div>
