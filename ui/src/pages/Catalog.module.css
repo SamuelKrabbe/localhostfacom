@@ -6,6 +6,13 @@
   padding-bottom: var(--space-8);
 }
 
+/* The cart bar stacks above the bottom tab bar here, so needs extra clearance. */
+@media (max-width: 640px) {
+  .page {
+    padding-bottom: calc(var(--bottom-nav-height) + var(--space-8));
+  }
+}
+
 .intro {
   margin-bottom: var(--space-5);
 }

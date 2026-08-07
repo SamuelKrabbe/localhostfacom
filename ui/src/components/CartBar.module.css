@@ -1,11 +1,20 @@
 .bar {
   position: fixed;
   inset: auto 0 0 0;
+  z-index: 20;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   box-shadow: var(--shadow-up);
   padding: var(--space-3) var(--space-4);
   padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+}
+
+/* Stacks above the bottom tab bar instead of covering it. */
+@media (max-width: 640px) {
+  .bar {
+    bottom: var(--bottom-nav-height);
+    padding-bottom: var(--space-3);
+  }
 }
 
 .inner {

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppHeader } from './components/AppHeader';
+import { BottomNav } from './components/BottomNav';
 import { CartProvider } from './cart/CartProvider';
 import { Catalog } from './pages/Catalog';
 import { OrderConfirmation } from './pages/OrderConfirmation';
@@ -18,6 +19,7 @@ function App() {
           <Route path="/confirmacao/:orderId" element={<OrderConfirmation />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <BottomNav />
       </BrowserRouter>
     </CartProvider>
   );
