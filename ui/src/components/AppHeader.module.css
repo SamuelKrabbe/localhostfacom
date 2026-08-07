@@ -19,6 +19,29 @@
   font-weight: 600;
   color: var(--color-text);
   text-decoration: none;
+  /* The prompt's trailing space is significant and must survive collapsing. */
+  white-space: pre;
+}
+
+/* The full command line is 33 monospace characters; it has to shrink to fit a phone. */
+@media (max-width: 640px) {
+  .wordmark {
+    font-size: var(--text-sm);
+  }
+}
+
+@media (max-width: 380px) {
+  .wordmark {
+    font-size: var(--text-xs);
+  }
+}
+
+.prompt {
+  color: var(--color-text-muted);
+}
+
+.command {
+  color: var(--color-text);
 }
 
 .host {
@@ -29,9 +52,28 @@
   color: var(--color-accent);
 }
 
-/* Static, not blinking: a flashing element next to a payment total is a distraction. */
+.path {
+  color: var(--color-text);
+}
+
 .cursor {
   color: var(--color-accent);
+}
+
+.blinking {
+  animation: blink 1.1s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blinking {
+    animation: none;
+  }
 }
 
 .nav {
