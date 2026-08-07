@@ -5726,6 +5726,8 @@ git commit -m "feat(api): add scheduled reconciler as webhook fallback"
 ```java
 package com.example.localhostfacom.settings;
 
+import com.example.localhostfacom.admin.Admin;
+import com.example.localhostfacom.admin.AdminRepository;
 import com.example.localhostfacom.common.ApiException;
 import com.example.localhostfacom.expense.ExpenseRepository;
 import com.example.localhostfacom.expense.ExpenseService;
@@ -5748,11 +5750,16 @@ class SettingsServiceTest {
     @Autowired private SettingsService settings;
     @Autowired private ExpenseService expenses;
     @Autowired private ExpenseRepository expenseRepository;
+    @Autowired private AdminRepository adminRepository;
+
+    private UUID adminId;
 
     @BeforeEach
     void setUp() {
         expenseRepository.deleteAll();
+        adminRepository.deleteAll();
         settings.update(new BigDecimal("2000.00"), null);
+        adminId = adminRepository.save(Admin.create("owner@example.com", "hash")).getId();
     }
 
     @Test
@@ -5776,8 +5783,8 @@ class SettingsServiceTest {
 
     @Test
     void sumsRecordedExpenses() {
-        expenses.create("Café em grão", new BigDecimal("40.00"), LocalDate.now(), UUID.randomUUID());
-        expenses.create("Copos", new BigDecimal("12.50"), LocalDate.now(), UUID.randomUUID());
+        expenses.create("Café em grão", new BigDecimal("40.00"), LocalDate.now(), adminId);
+        expenses.create("Copos", new BigDecimal("12.50"), LocalDate.now(), adminId);
 
         assertThat(expenses.total()).isEqualByComparingTo("52.50");
     }
@@ -5789,7 +5796,7 @@ class SettingsServiceTest {
 
     @Test
     void deletesAnExpense() {
-        var expense = expenses.create("Erro", new BigDecimal("5.00"), LocalDate.now(), UUID.randomUUID());
+        var expense = expenses.create("Erro", new BigDecimal("5.00"), LocalDate.now(), adminId);
 
         expenses.delete(expense.getId());
 
