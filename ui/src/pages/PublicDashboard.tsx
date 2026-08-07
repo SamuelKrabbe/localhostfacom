@@ -86,7 +86,7 @@ export function PublicDashboard() {
 
         {/* Meta de Arrecadação */}
         <a 
-          href={data.goal.crowdfundingUrl} 
+          href={data.goal.crowdfundingUrl ?? undefined}
           target="_blank" 
           rel="noopener noreferrer"
           className="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 transition-colors group cursor-pointer"
@@ -151,8 +151,8 @@ export function PublicDashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-600 font-medium">Mais Vendido</p>
-              <p className="text-xl font-bold text-gray-900 line-clamp-1" title={data.kpis.topProduct}>
-                {data.kpis.topProduct}
+              <p className="text-xl font-bold text-gray-900 line-clamp-1" title={data.kpis.topProduct ?? undefined}>
+                {data.kpis.topProduct ?? '—'}
               </p>
             </div>
           </div>
@@ -184,7 +184,7 @@ export function PublicDashboard() {
                   <Tooltip 
                     cursor={{ fill: '#F3F4F6' }}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    formatter={(value: number) => [formatCurrency(value), 'Arrecadado']}
+                    formatter={(value) => [formatCurrency(Number(value)), 'Arrecadado']}
                     labelStyle={{ color: '#374151', fontWeight: 'bold', marginBottom: '4px' }}
                   />
                   <Bar dataKey="amount" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={40} />
