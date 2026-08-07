@@ -40,9 +40,18 @@
   font-size: var(--text-sm);
 }
 
+/* Below this width the bottom tab bar takes over navigation instead. */
+@media (max-width: 640px) {
+  .nav {
+    display: none;
+  }
+}
+
 .link {
   color: var(--color-text-muted);
   text-decoration: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
 }
 
 .link:hover {
@@ -52,4 +61,8 @@
 .linkActive {
   color: var(--color-accent);
   font-weight: 500;
+  text-decoration: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-weak);
 }

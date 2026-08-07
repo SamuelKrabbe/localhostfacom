@@ -13,10 +13,19 @@ import { Money } from '../components/Money';
 import { StateView } from '../components/StateView';
 import { formatCurrency, formatDateTime } from '../lib/format';
 import { messageFor } from '../lib/errors';
+import { useDarkMode } from '../lib/useDarkMode';
 import type { DashboardResponse, Transaction } from '../types';
 import styles from './PublicDashboard.module.css';
 
 const PAGE_SIZE = 20;
+
+// Recharts sets these as SVG attributes, not CSS properties, so it cannot read the
+// custom properties in tokens.css — these are copies, light and dark, of the same
+// --color-border / --color-text-muted / --color-surface / --color-accent values.
+const CHART_COLORS = {
+  light: { grid: '#e7e5e4', tick: '#57534e', cursor: '#f5f5f4', bar: '#7c3aed', tooltipBg: '#ffffff', tooltipText: '#1c1917' },
+  dark: { grid: '#44403c', tick: '#a8a29e', cursor: '#1c1917', bar: '#a78bfa', tooltipBg: '#292524', tooltipText: '#fafaf9' },
+};
 
 export function PublicDashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
@@ -26,6 +35,7 @@ export function PublicDashboard() {
   // Bumped by retry() to re-run the fetch below without calling setState synchronously
   // inside the effect body itself — that pattern trips react-hooks/set-state-in-effect.
   const [reloadToken, setReloadToken] = useState(0);
+  const chartColors = CHART_COLORS[useDarkMode() ? 'dark' : 'light'];
 
   useEffect(() => {
     getDashboard(page, PAGE_SIZE)
@@ -128,26 +138,33 @@ export function PublicDashboard() {
           <div className={styles.chart}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
                 <XAxis
                   dataKey="date"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: '#57534e' }}
+                  tick={{ fontSize: 12, fill: chartColors.tick }}
                   dy={8}
                 />
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: '#57534e' }}
+                  tick={{ fontSize: 12, fill: chartColors.tick }}
                   tickFormatter={(value) => `R$${value}`}
                 />
                 <Tooltip
-                  cursor={{ fill: '#f5f5f4' }}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e7e5e4' }}
+                  cursor={{ fill: chartColors.cursor }}
+                  contentStyle={{
+                    borderRadius: '8px',
+                    border: `1px solid ${chartColors.grid}`,
+                    background: chartColors.tooltipBg,
+                    color: chartColors.tooltipText,
+                  }}
+                  labelStyle={{ color: chartColors.tooltipText }}
+                  itemStyle={{ color: chartColors.tooltipText }}
                   formatter={(value) => [formatCurrency(Number(value)), 'Arrecadado']}
                 />
-                <Bar dataKey="amount" fill="#7c3aed" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="amount" fill={chartColors.bar} radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -162,7 +179,7 @@ export function PublicDashboard() {
               <ul>
                 {transactions.map((transaction) => (
                   <li key={transaction.id} className={styles.transaction}>
-                    <div>
+                    <div className={styles.transactionInfo}>
                       <p className={styles.transactionItems}>{transaction.productNames}</p>
                       <p className={styles.transactionMeta}>
                         #{transaction.id} · {formatDateTime(transaction.timestamp)}

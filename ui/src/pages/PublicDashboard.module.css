@@ -120,6 +120,14 @@
   border-bottom: none;
 }
 
+.transactionInfo {
+  /* The default flex-item min-width is content-based, which is exactly what the
+     ellipsis below needs to not have — this is what lets it actually truncate
+     instead of forcing the whole row (and page) to overflow horizontally. */
+  min-width: 0;
+  flex: 1;
+}
+
 .transactionItems {
   font-size: var(--text-sm);
   overflow: hidden;
