@@ -274,7 +274,7 @@ CREATE TABLE image (
     mime_type   VARCHAR(100) NOT NULL,
     width       INTEGER      NOT NULL,
     height      INTEGER      NOT NULL,
-    hash        CHAR(64)     NOT NULL UNIQUE,
+    hash        VARCHAR(64)  NOT NULL UNIQUE,
     created_at  TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
