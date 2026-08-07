@@ -9,6 +9,9 @@ public record ProductResponse(
         UUID id,
         String name,
         BigDecimal price,
+        // Carried so the admin form can resubmit the image it did not change; a bare
+        // imageUrl cannot be turned back into the id an update request needs.
+        UUID imageId,
         String imageUrl,
         Integer imageWidth,
         Integer imageHeight,
@@ -20,6 +23,7 @@ public record ProductResponse(
                 product.getId(),
                 product.getName(),
                 product.getPrice(),
+                image == null ? null : image.getId(),
                 imageUrl,
                 image == null ? null : image.getWidth(),
                 image == null ? null : image.getHeight(),

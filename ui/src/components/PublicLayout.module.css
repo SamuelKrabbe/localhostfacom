@@ -1,0 +1,6 @@
+/* Room for the fixed bottom tab bar, which only exists on the public screens. */
+@media (max-width: 640px) {
+  .shell {
+    padding-bottom: var(--bottom-nav-height);
+  }
+}
