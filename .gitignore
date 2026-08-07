@@ -44,6 +44,7 @@ Thumbs.db
 ### Logs ###
 *.log
 logs/
+.run-logs/
 
 ### Banco de dados local (se usar Postgres via container com volume local) ###
 *.sql.bak
