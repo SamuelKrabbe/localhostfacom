@@ -1,0 +1,30 @@
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sm {
+  font-size: var(--text-sm);
+}
+
+.md {
+  font-size: var(--text-base);
+}
+
+.lg {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.positive {
+  color: var(--color-positive);
+}
+
+.negative {
+  color: var(--color-negative);
+}
