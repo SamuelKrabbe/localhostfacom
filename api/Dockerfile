@@ -18,8 +18,12 @@ FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 # The platform injects PORT; application.yaml already reads it, defaulting to 8080.
+# preferIPv6Addresses matters on private networks that are IPv6-only (Railway's
+# *.railway.internal is): the JVM otherwise prefers the IPv4 address and the connection
+# fails with "Network is unreachable". It only changes the preference when a name
+# resolves to both families, so it is inert on IPv4-only platforms.
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0"
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -Djava.net.preferIPv6Addresses=true"
 
 COPY --from=builder /build/target/*.jar app.jar
 

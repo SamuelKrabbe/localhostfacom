@@ -1,6 +1,10 @@
 package com.example.localhostfacom;
 
 import com.example.localhostfacom.config.DatabaseUrl;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
@@ -11,7 +15,30 @@ public class LocalhostfacomApplication {
 
 	public static void main(String[] args) {
 		applyPlatformDatabaseUrl();
+		reportDatabaseTarget();
 		SpringApplication.run(LocalhostfacomApplication.class, args);
+	}
+
+	/**
+	 * A failed connection reports "Network is unreachable" without naming the host or the
+	 * address it dialled, which is the one thing needed to tell an IPv6-only private
+	 * network apart from a wrong hostname. Printed before the context starts, so it
+	 * survives a startup failure. Credentials are never part of this.
+	 */
+	private static void reportDatabaseTarget() {
+		String url = System.getProperty("spring.datasource.url", System.getenv("DATABASE_URL"));
+		String host = DatabaseUrl.hostOf(url).orElse(null);
+		if (host == null) {
+			return;
+		}
+		try {
+			String addresses = Arrays.stream(InetAddress.getAllByName(host))
+					.map(InetAddress::getHostAddress)
+					.collect(Collectors.joining(", "));
+			System.out.println("Database host " + host + " resolves to: " + addresses);
+		} catch (UnknownHostException exception) {
+			System.out.println("Database host " + host + " does not resolve: " + exception.getMessage());
+		}
 	}
 
 	/**

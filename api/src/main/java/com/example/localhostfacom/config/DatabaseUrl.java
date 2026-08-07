@@ -59,6 +59,22 @@ public final class DatabaseUrl {
         return Optional.of(new JdbcConnection(url.toString(), username, password));
     }
 
+    /**
+     * The host the driver will dial, from either URL form. Used only to report where the
+     * connection is going: "Network is unreachable" does not say which name it resolved.
+     */
+    public static Optional<String> hostOf(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        String withoutJdbcPrefix = value.startsWith("jdbc:") ? value.substring("jdbc:".length()) : value;
+        try {
+            return Optional.ofNullable(new URI(withoutJdbcPrefix.trim()).getHost());
+        } catch (URISyntaxException exception) {
+            return Optional.empty();
+        }
+    }
+
     private static String decode(String value) {
         return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }

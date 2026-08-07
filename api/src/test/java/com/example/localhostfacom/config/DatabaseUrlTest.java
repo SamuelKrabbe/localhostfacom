@@ -79,4 +79,32 @@ class DatabaseUrlTest {
     void ignoresAnUnknownScheme() {
         assertThat(DatabaseUrl.fromPlatformUrl("mysql://user:pass@host/db")).isEmpty();
     }
+
+    @Test
+    @DisplayName("reads the host out of a JDBC URL")
+    void readsTheHostOutOfAJdbcUrl() {
+        assertThat(DatabaseUrl.hostOf("jdbc:postgresql://db.internal:5432/localhostfacom"))
+                .contains("db.internal");
+    }
+
+    @Test
+    @DisplayName("reads the host out of a platform URL")
+    void readsTheHostOutOfAPlatformUrl() {
+        assertThat(DatabaseUrl.hostOf("postgres://user:pass@postgres.railway.internal:5432/railway"))
+                .contains("postgres.railway.internal");
+    }
+
+    @Test
+    @DisplayName("reads the host out of a URL with no port")
+    void readsTheHostOutOfAUrlWithNoPort() {
+        assertThat(DatabaseUrl.hostOf("jdbc:postgresql://dpg-abc123/db")).contains("dpg-abc123");
+    }
+
+    @Test
+    @DisplayName("has no host to report for a missing or unparseable value")
+    void hasNoHostToReportForGarbage() {
+        assertThat(DatabaseUrl.hostOf(null)).isEmpty();
+        assertThat(DatabaseUrl.hostOf("")).isEmpty();
+        assertThat(DatabaseUrl.hostOf("not a url")).isEmpty();
+    }
 }
