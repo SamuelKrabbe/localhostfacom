@@ -1,235 +1,185 @@
-import { useState, useEffect } from 'react';
-import { 
-  DollarSign, 
-  ShoppingBag, 
-  TrendingUp, 
-  Award, 
-  ExternalLink,
-  Loader2
-} from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer 
+import { useEffect, useState } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import type { DashboardResponse } from '../types';
+import { getDashboard } from '../api/public';
+import { Money } from '../components/Money';
+import { StateView } from '../components/StateView';
+import { formatCurrency, formatDateTime } from '../lib/format';
+import { messageFor } from '../lib/errors';
+import type { DashboardResponse, Transaction } from '../types';
+import styles from './PublicDashboard.module.css';
 
-// Tipagens baseadas no que a API REST deve retornar
+const PAGE_SIZE = 20;
+
 export function PublicDashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [page, setPage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  // Bumped by retry() to re-run the fetch below without calling setState synchronously
+  // inside the effect body itself — that pattern trips react-hooks/set-state-in-effect.
+  const [reloadToken, setReloadToken] = useState(0);
 
-  // Busca os dados da API (KPIs, Gráfico e primeira página de transações)
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setIsLoading(true);
-        // Exemplo de endpoint REST: /api/public/dashboard?page={page}
-        const response = await fetch(`/api/public/dashboard?page=${page}`);
-        const result = await response.json();
-        
-        setData(prev => {
-          if (!prev || page === 0) return result;
-          // Se estiver paginando, adiciona as novas transações à lista existente
-          return {
-            ...result,
-            transactions: {
-              ...result.transactions,
-              content: [...prev.transactions.content, ...result.transactions.content]
-            }
-          };
-        });
-      } catch (error) {
-        console.error('Erro ao carregar dashboard:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    getDashboard(page, PAGE_SIZE)
+      .then((result) => {
+        setData(result);
+        setTransactions((current) =>
+          page === 0
+            ? result.transactions.content
+            : [...current, ...result.transactions.content],
+        );
+        setError(null);
+      })
+      .catch((cause: unknown) => setError(messageFor(cause)));
+  }, [page, reloadToken]);
 
-    fetchDashboardData();
-  }, [page]);
+  const retry = () => setReloadToken((token) => token + 1);
 
-  const formatCurrency = (value: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-  const formatDate = (isoString: string) => 
-    new Intl.DateTimeFormat('pt-BR', { 
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
-    }).format(new Date(isoString));
-
-  if (isLoading && !data) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-blue-600" />
-      </div>
-    );
+  if (error) {
+    return <StateView kind="error" message={error} onRetry={retry} />;
   }
 
-  if (!data) return null;
+  if (!data) {
+    return <StateView kind="loading" message="carregando dados..." />;
+  }
 
-  const progressPercentage = Math.min((data.goal.current / data.goal.target) * 100, 100);
+  const { kpis, goal, chartData } = data;
+  // The balance can be a real deficit; only the bar is clamped, never the figure.
+  const progress = Math.min(100, Math.max(0, (goal.current / goal.target) * 100));
+  const hasMore = page < data.transactions.totalPages - 1;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        
-        {/* Cabeçalho */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Portal de Transparência</h1>
-          <p className="text-gray-600">Acompanhe a arrecadação da nossa sala de estudos em tempo real.</p>
+    <div className={styles.page}>
+      <div>
+        <h1 className={styles.title}>Portal de transparência</h1>
+        <p className={styles.subtitle}>
+          Cada centavo arrecadado e cada despesa da sala de estudos, em tempo real.
+        </p>
+      </div>
+
+      <section className={styles.panel}>
+        <div className={styles.goalHead}>
+          <div>
+            <p className={styles.goalLabel}>Caixa atual</p>
+            <Money value={goal.current} tone="auto" size="lg" />
+          </div>
+          <div>
+            <p className={styles.goalLabel}>Meta</p>
+            <Money value={goal.target} tone="muted" />
+          </div>
         </div>
 
-        {/* Meta de Arrecadação */}
-        <a 
-          href={data.goal.crowdfundingUrl ?? undefined}
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 transition-colors group cursor-pointer"
+        <div
+          className={styles.track}
+          role="progressbar"
+          aria-valuenow={Math.round(progress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
         >
-          <div className="flex justify-between items-end mb-2">
-            <div>
-              <h2 className="text-sm font-medium text-gray-600 mb-1">Meta de Arrecadação</h2>
-              <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-bold text-gray-900">{formatCurrency(data.goal.current)}</span>
-                <span className="text-sm text-gray-500">de {formatCurrency(data.goal.target)}</span>
-              </div>
-            </div>
-            <div className="flex items-center text-blue-600 text-sm font-medium">
-              <span>Ajudar na Vaquinha</span>
-              <ExternalLink size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-            <div 
-              className="bg-blue-600 h-3 rounded-full transition-all duration-1000 ease-out"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
-          <p className="text-right text-xs text-gray-500 mt-2">{progressPercentage.toFixed(1)}% alcançado</p>
-        </a>
-
-        {/* KPIs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-start space-x-4">
-            <div className="bg-green-100 p-3 rounded-lg text-green-700">
-              <DollarSign size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 font-medium">Total Arrecadado</p>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(data.kpis.totalRaised)}</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-start space-x-4">
-            <div className="bg-blue-100 p-3 rounded-lg text-blue-700">
-              <ShoppingBag size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 font-medium">Pedidos Realizados</p>
-              <p className="text-xl font-bold text-gray-900">{data.kpis.totalOrders}</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-start space-x-4">
-            <div className="bg-purple-100 p-3 rounded-lg text-purple-700">
-              <TrendingUp size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 font-medium">Ticket Médio</p>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(data.kpis.averageTicket)}</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-start space-x-4">
-            <div className="bg-orange-100 p-3 rounded-lg text-orange-700">
-              <Award size={24} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 font-medium">Mais Vendido</p>
-              <p className="text-xl font-bold text-gray-900 line-clamp-1" title={data.kpis.topProduct ?? undefined}>
-                {data.kpis.topProduct ?? '—'}
-              </p>
-            </div>
-          </div>
+          <div className={styles.fill} style={{ width: `${progress}%` }} />
         </div>
 
-        {/* Gráfico e Tabela de Transações (Grid Responsivo) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Gráfico de Vendas */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Arrecadação nos Últimos 7 Dias</h3>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
-                    tickFormatter={(val) => `R$${val}`}
-                  />
-                  <Tooltip 
-                    cursor={{ fill: '#F3F4F6' }}
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                    formatter={(value) => [formatCurrency(Number(value)), 'Arrecadado']}
-                    labelStyle={{ color: '#374151', fontWeight: 'bold', marginBottom: '4px' }}
-                  />
-                  <Bar dataKey="amount" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        {goal.crowdfundingUrl ? (
+          <p className={styles.goalFoot}>
+            <a href={goal.crowdfundingUrl} target="_blank" rel="noopener noreferrer">
+              Contribuir pela vaquinha
+            </a>
+          </p>
+        ) : null}
+      </section>
 
-          {/* Últimas Transações */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Últimas Contribuições</h3>
-            
-            <div className="flex-1 overflow-y-auto min-h-[250px]">
-              {data.transactions.content.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">Nenhuma contribuição registrada ainda.</p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {data.transactions.content.map((tx) => (
-                    <li key={tx.id} className="py-3 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{tx.productNames}</p>
-                        <p className="text-xs text-gray-500">{formatDate(tx.timestamp)}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-green-600">
-                        +{formatCurrency(tx.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Paginação */}
-            {page < data.transactions.totalPages - 1 && (
-              <button 
-                onClick={() => setPage(p => p + 1)}
-                disabled={isLoading}
-                className="mt-4 w-full py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
-              >
-                {isLoading ? 'Carregando...' : 'Carregar mais'}
-              </button>
-            )}
-          </div>
-
+      <section className={styles.kpis}>
+        <div className={styles.kpi}>
+          <p className={styles.kpiLabel}>Arrecadado</p>
+          <p className={styles.kpiValue}>{formatCurrency(kpis.totalRaised)}</p>
         </div>
+        <div className={styles.kpi}>
+          <p className={styles.kpiLabel}>Despesas</p>
+          <p className={styles.kpiValue}>{formatCurrency(kpis.totalExpenses)}</p>
+        </div>
+        <div className={styles.kpi}>
+          <p className={styles.kpiLabel}>Pedidos pagos</p>
+          <p className={styles.kpiValue}>{kpis.totalOrders}</p>
+        </div>
+        <div className={styles.kpi}>
+          <p className={styles.kpiLabel}>Ticket médio</p>
+          <p className={styles.kpiValue}>{formatCurrency(kpis.averageTicket)}</p>
+        </div>
+        <div className={styles.kpi}>
+          <p className={styles.kpiLabel}>Mais vendido</p>
+          {/* Null until something sells — an em dash, never an empty box. */}
+          <p className={styles.kpiValue} title={kpis.topProduct ?? undefined}>
+            {kpis.topProduct ?? '—'}
+          </p>
+        </div>
+      </section>
+
+      <div className={styles.grid}>
+        <section className={styles.panel}>
+          <h2 className={styles.panelTitle}>Últimos 7 dias</h2>
+          <div className={styles.chart}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#57534e' }}
+                  dy={8}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#57534e' }}
+                  tickFormatter={(value) => `R$${value}`}
+                />
+                <Tooltip
+                  cursor={{ fill: '#f5f5f4' }}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e7e5e4' }}
+                  formatter={(value) => [formatCurrency(Number(value)), 'Arrecadado']}
+                />
+                <Bar dataKey="amount" fill="#7c3aed" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+
+        <section className={styles.panel}>
+          <h2 className={styles.panelTitle}>Transações</h2>
+          {transactions.length === 0 ? (
+            <StateView kind="empty" message="Nenhuma venda registrada ainda." />
+          ) : (
+            <>
+              <ul>
+                {transactions.map((transaction) => (
+                  <li key={transaction.id} className={styles.transaction}>
+                    <div>
+                      <p className={styles.transactionItems}>{transaction.productNames}</p>
+                      <p className={styles.transactionMeta}>
+                        #{transaction.id} · {formatDateTime(transaction.timestamp)}
+                      </p>
+                    </div>
+                    <Money value={transaction.amount} size="sm" />
+                  </li>
+                ))}
+              </ul>
+              {hasMore ? (
+                <button type="button" className={styles.more} onClick={() => setPage(page + 1)}>
+                  Carregar mais
+                </button>
+              ) : null}
+            </>
+          )}
+        </section>
       </div>
     </div>
   );
