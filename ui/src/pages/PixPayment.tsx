@@ -1,91 +1,158 @@
-import { useState, useEffect } from 'react';
-import { Copy, CheckCircle, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Check, Copy, Loader2 } from 'lucide-react';
+import { createCharge, getOrderStatus } from '../api/public';
+import { Money } from '../components/Money';
+import { StateView } from '../components/StateView';
+import { formatCountdown } from '../lib/format';
+import { messageFor } from '../lib/errors';
+import type { OrderChargeResponse } from '../types';
+import styles from './PixPayment.module.css';
 
-interface PixPaymentProps {
-  orderId: string;
-  pixCode: string;
-  pixBase64: string;
-  totalValue: number;
-  onPaymentConfirmed: () => void;
-}
+const POLL_INTERVAL_MS = 3000;
 
-export function PixPayment({ orderId, pixCode, pixBase64, totalValue, onPaymentConfirmed }: PixPaymentProps) {
+export function PixPayment() {
+  const { orderId = '' } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Present on the normal path from checkout; absent after a refresh or a cold open.
+  const initialCharge = (location.state as { charge?: OrderChargeResponse } | null)?.charge ?? null;
+
+  const [charge, setCharge] = useState<OrderChargeResponse | null>(initialCharge);
+  const [error, setError] = useState<string | null>(null);
+  const [isExpired, setIsExpired] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [status, setStatus] = useState<'pending' | 'expired'>('pending');
+  const [now, setNow] = useState(() => Date.now());
+  // Bumped by the retry button to re-run the charge fetch below without calling
+  // setState synchronously inside the effect body — see react-hooks/set-state-in-effect.
+  const [reloadToken, setReloadToken] = useState(0);
 
-  // Polling para checar status do pagamento
   useEffect(() => {
-    if (status !== 'pending') return;
+    if (charge) {
+      return;
+    }
+    // Idempotent server-side: returns the original charge, never a second payable one.
+    createCharge(orderId)
+      .then(setCharge)
+      .catch((cause: unknown) => setError(messageFor(cause)));
+  }, [charge, orderId, reloadToken]);
 
-    const checkPaymentStatus = async () => {
+  const retryLoadCharge = () => {
+    setError(null);
+    setReloadToken((token) => token + 1);
+  };
+
+  // Polls until the order leaves PENDING. A failed poll is not a failed payment.
+  useEffect(() => {
+    if (!charge || isExpired) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const check = async () => {
       try {
-        const response = await fetch(`/api/orders/${orderId}/status`);
-        const data = await response.json();
-        
-        if (data.status === 'PAID') {
-          onPaymentConfirmed();
-        } else if (data.status === 'EXPIRED') {
-          setStatus('expired');
+        const result = await getOrderStatus(orderId, controller.signal);
+        if (result.status === 'PAID') {
+          navigate(`/confirmacao/${orderId}`, { replace: true });
+        } else if (result.status === 'EXPIRED' || result.status === 'CANCELED') {
+          setIsExpired(true);
         }
-      } catch (error) {
-        console.error('Erro ao checar status:', error);
+      } catch {
+        // Transient network or server blip. Keep polling.
       }
     };
 
-    const interval = setInterval(checkPaymentStatus, 3000); // Checa a cada 3s
-    
-    // Timeout após 10 minutos (opcional, dependendo do backend)
-    const timeout = setTimeout(() => setStatus('expired'), 10 * 60 * 1000);
-
+    const interval = setInterval(check, POLL_INTERVAL_MS);
     return () => {
       clearInterval(interval);
-      clearTimeout(timeout);
+      controller.abort();
     };
-  }, [orderId, status, onPaymentConfirmed]);
+  }, [charge, isExpired, navigate, orderId]);
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(pixCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Ticks a clock rather than calling setState eagerly; the countdown itself is derived
+  // below. Display only — expiry is whatever the API reports, never this timer.
+  useEffect(() => {
+    if (!charge) {
+      return;
+    }
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [charge]);
+
+  const msRemaining = charge ? new Date(charge.expiresAt).getTime() - now : 0;
+
+  const copy = async () => {
+    if (!charge) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(charge.payload);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Não foi possível copiar. Selecione o código manualmente.');
+    }
   };
 
-  if (status === 'expired') {
+  if (isExpired) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
-        <p className="text-red-600 font-medium mb-2">O tempo para pagamento expirou.</p>
-        <button onClick={() => window.location.reload()} className="mt-4 text-blue-600 underline">
-          Tentar novamente
-        </button>
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <h1 className={styles.title}>Pedido expirado</h1>
+          <p className={styles.hint}>
+            O prazo para pagamento acabou. Seu carrinho foi mantido — é só refazer o pedido.
+          </p>
+          <Link to="/cardapio" className={styles.back}>
+            Voltar ao cardápio
+          </Link>
+        </div>
       </div>
     );
   }
 
+  if (error && !charge) {
+    return <StateView kind="error" message={error} onRetry={retryLoadCharge} />;
+  }
+
+  if (!charge) {
+    return <StateView kind="loading" message="gerando cobrança..." />;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-24">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col items-center text-center">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Pagamento via Pix</h2>
-        <p className="text-gray-600 mb-6">Escaneie o QR Code ou copie o código abaixo para pagar.</p>
-        
-        <div className="bg-gray-100 p-4 rounded-lg mb-6">
-          <img src={`data:image/jpeg;base64,${pixBase64}`} alt="QR Code Pix" className="w-48 h-48" />
-        </div>
+    <div className={styles.page}>
+      <div className={styles.card}>
+        <h1 className={styles.title}>Pague com PIX</h1>
+        <p className={styles.hint}>Escaneie o QR Code no app do seu banco ou copie o código.</p>
 
-        <div className="text-2xl font-bold text-gray-900 mb-6">
-          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
-        </div>
+        <img
+          src={`data:image/png;base64,${charge.qrImageBase64}`}
+          alt="QR Code do PIX"
+          className={styles.qr}
+        />
 
-        <button 
-          onClick={handleCopy}
-          className="w-full flex items-center justify-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-900 py-3 px-4 rounded-lg font-medium transition-colors mb-8"
-        >
-          {copied ? <CheckCircle size={20} className="text-green-600" /> : <Copy size={20} />}
-          <span>{copied ? 'Código copiado!' : 'Copiar código Pix'}</span>
+        <Money value={charge.total} size="lg" />
+
+        <button type="button" className={styles.copy} onClick={copy}>
+          {copied ? <Check size={18} /> : <Copy size={18} />}
+          {copied ? 'Código copiado' : 'Copiar código PIX'}
         </button>
 
-        <div className="flex flex-col items-center text-gray-500 space-y-3">
-          <Loader2 size={24} className="animate-spin text-blue-600" />
-          <p className="text-sm">Aguardando confirmação do pagamento...</p>
+        {error ? (
+          <p className={styles.hint} role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className={styles.waiting}>
+          <Loader2 size={18} className={styles.spinner} />
+          aguardando pagamento...
         </div>
+
+        <p className={`${styles.countdown} ${msRemaining < 60_000 ? styles.expiring : ''}`}>
+          expira em {formatCountdown(msRemaining)}
+        </p>
       </div>
     </div>
   );
