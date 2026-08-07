@@ -11,6 +11,7 @@ import com.example.localhostfacom.settings.SettingsRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,6 +29,17 @@ class EntityMappingTest {
     @Autowired private OrderRepository orders;
     @Autowired private AdminRepository admins;
     @Autowired private SettingsRepository settings;
+
+    // The H2 database is shared across every test class in the same JVM run, so rows
+    // another class committed (e.g. AuthenticationTest's admins) are still visible here
+    // even though @Transactional rolls back what THIS class writes. Start every test
+    // from a known-empty slate rather than assuming a pristine database.
+    @BeforeEach
+    void setUp() {
+        orders.deleteAll();
+        products.deleteAll();
+        admins.deleteAll();
+    }
 
     @Test
     void persistsAnOrderWithItemsAndAssignsASequence() {

@@ -633,6 +633,7 @@ import com.example.localhostfacom.settings.SettingsRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -650,6 +651,17 @@ class EntityMappingTest {
     @Autowired private OrderRepository orders;
     @Autowired private AdminRepository admins;
     @Autowired private SettingsRepository settings;
+
+    // The H2 database is shared across every test class in the same JVM run, so rows
+    // another class committed (e.g. AuthenticationTest's admins) are still visible here
+    // even though @Transactional rolls back what THIS class writes. Start every test
+    // from a known-empty slate rather than assuming a pristine database.
+    @BeforeEach
+    void setUp() {
+        orders.deleteAll();
+        products.deleteAll();
+        admins.deleteAll();
+    }
 
     @Test
     void persistsAnOrderWithItemsAndAssignsASequence() {
@@ -1726,7 +1738,7 @@ import com.example.localhostfacom.admin.AdminRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -1769,7 +1781,7 @@ class AuthenticationTest {
                 .andExpect(jsonPath("$.email").value("owner@example.com"))
                 .andReturn().getResponse().getContentAsString();
 
-        String token = com.jayway.jsonpath.JsonPath.read(body, "$.token");
+        String token = extractToken(body);
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
@@ -1800,7 +1812,7 @@ class AuthenticationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"owner@example.com\",\"password\":\"correct-horse\"}"))
                 .andReturn().getResponse().getContentAsString();
-        String token = com.jayway.jsonpath.JsonPath.read(body, "$.token");
+        String token = extractToken(body);
 
         mockMvc.perform(get("/api/admin/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -1815,6 +1827,18 @@ class AuthenticationTest {
     @Test
     void publicRoutesNeedNoToken() throws Exception {
         mockMvc.perform(get("/api/public/products")).andExpect(status().isOk());
+    }
+
+    // No com.jayway.jsonpath on the test classpath — Boot 4 dropped the monolithic
+    // spring-boot-starter-test in favor of per-feature -test starters. The token is the
+    // only field these tests need to pull out, so a regex is simpler than adding a
+    // dependency for one line.
+    private String extractToken(String json) {
+        var matcher = java.util.regex.Pattern.compile("\"token\":\"([^\"]+)\"").matcher(json);
+        if (!matcher.find()) {
+            throw new IllegalStateException("No token field in response: " + json);
+        }
+        return matcher.group(1);
     }
 }
 ```
@@ -4195,6 +4219,16 @@ public class MercadoPagoSignatureVerifier {
 
 - [ ] **Step 4: Write the provider**
 
+**Before writing this**, confirm which Jackson `ObjectMapper` Spring actually autowires here.
+Boot 4 moved to Jackson 3 under the `tools.jackson.*` groupId/package for its own
+`spring-boot-starter-jackson` (confirmed in Task 1/4: `tools.jackson.core:jackson-databind`
+was on the classpath, not `com.fasterxml.jackson.core`). `jjwt-jackson` separately pulls
+`com.fasterxml.jackson.core:jackson-databind:2.21.4` as its own runtime dependency for JWT
+serialization only — that one is not the bean Spring injects. Import
+`tools.jackson.databind.JsonNode` / `tools.jackson.databind.ObjectMapper` below unless a
+build check at execution time shows otherwise; run
+`./mvnw dependency:tree | grep -i jackson` first if unsure.
+
 `payment/MercadoPagoPaymentProvider.java`:
 
 ```java
@@ -4202,8 +4236,8 @@ package com.example.localhostfacom.payment;
 
 import com.example.localhostfacom.common.ApiException;
 import com.example.localhostfacom.config.AppProperties;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -5209,7 +5243,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
