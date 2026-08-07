@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Talks to the Mercado Pago REST API directly rather than through the official Java SDK:
@@ -24,6 +25,11 @@ import org.springframework.web.client.RestClient;
 public class MercadoPagoPaymentProvider implements PaymentProvider {
 
     private static final Logger log = LoggerFactory.getLogger(MercadoPagoPaymentProvider.class);
+
+    // Mercado Pago rejects the bare ISO form: it wants milliseconds and a numeric offset,
+    // so "Z" is not accepted.
+    private static final DateTimeFormatter EXPIRATION_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
 
     private final RestClient client;
     private final ObjectMapper objectMapper;
@@ -52,7 +58,7 @@ public class MercadoPagoPaymentProvider implements PaymentProvider {
         body.put("payment_method_id", "pix");
         // Derived from the order row so the provider and the database never disagree
         // about when the charge dies.
-        body.put("date_of_expiration", DateTimeFormatter.ISO_OFFSET_DATE_TIME
+        body.put("date_of_expiration", EXPIRATION_FORMAT
                 .format(request.expiresAt().atOffset(ZoneOffset.UTC)));
         body.put("payer", Map.of("email", "anonimo@localhostfacom.dev"));
 
@@ -82,6 +88,14 @@ public class MercadoPagoPaymentProvider implements PaymentProvider {
                     request.expiresAt());
         } catch (ApiException exception) {
             throw exception;
+        } catch (RestClientResponseException exception) {
+            // Mercado Pago puts the actionable reason in the body, not in the status line.
+            log.error("Mercado Pago rejected the charge for order {}: {} {}",
+                    request.orderId(),
+                    exception.getStatusCode(),
+                    exception.getResponseBodyAsString());
+            throw ApiException.badGateway("payment-provider-error",
+                    "Could not create the payment charge");
         } catch (RuntimeException exception) {
             log.error("Mercado Pago charge creation failed for order {}", request.orderId(), exception);
             throw ApiException.badGateway("payment-provider-error",
