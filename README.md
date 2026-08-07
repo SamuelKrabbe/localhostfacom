@@ -108,6 +108,21 @@ As demais variáveis precisam ser definidas manualmente, e sem elas a API não s
 | `APP_STORAGE_*` | Bucket das imagens; o padrão aponta para o MinIO local |
 | `APP_CORS_ORIGINS` | Origem do frontend publicado |
 
+### Supabase + Render
+
+A conexão direta do Supabase (`db.<ref>.supabase.co`) só tem endereço IPv6, e a
+saída de rede do Render é só IPv4 — a conexão falha com
+`java.net.SocketException: Network is unreachable`. Use a string de conexão do
+pooler (Supavisor) em **session mode**, que tem IPv4:
+
+```
+postgresql://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres
+```
+
+Repare que o usuário é `postgres.<ref>`, não `postgres`. Não use a porta `6543`
+(transaction mode): ela não suporta prepared statements nem advisory locks de
+sessão, e o Flyway usa os dois na migração de startup.
+
 ## Estrutura do repositório
 
 ```

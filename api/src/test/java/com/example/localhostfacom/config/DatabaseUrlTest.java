@@ -81,6 +81,20 @@ class DatabaseUrlTest {
     }
 
     @Test
+    @DisplayName("converts a Supabase pooler URL, whose user carries the project ref")
+    void convertsASupabasePoolerUrl() {
+        Optional<DatabaseUrl.JdbcConnection> connection = DatabaseUrl.fromPlatformUrl(
+                "postgresql://postgres.abcdefghij:s3cret@aws-0-sa-east-1.pooler.supabase.com:5432/postgres");
+
+        assertThat(connection).isPresent();
+        assertThat(connection.get().url())
+                .isEqualTo("jdbc:postgresql://aws-0-sa-east-1.pooler.supabase.com:5432/postgres");
+        // The dot in the username is part of it, not a separator.
+        assertThat(connection.get().username()).isEqualTo("postgres.abcdefghij");
+        assertThat(connection.get().password()).isEqualTo("s3cret");
+    }
+
+    @Test
     @DisplayName("reads the host out of a JDBC URL")
     void readsTheHostOutOfAJdbcUrl() {
         assertThat(DatabaseUrl.hostOf("jdbc:postgresql://db.internal:5432/localhostfacom"))
