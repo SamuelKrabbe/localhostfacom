@@ -35,6 +35,15 @@ O cliente escaneia um QR Code fixo na sala, monta o pedido e paga via PIX; o pag
 - Node.js 24+
 - Podman ou Docker (Postgres e MinIO sobem via compose)
 
+### Tudo de uma vez
+
+```bash
+./run.sh                  # sobe infra, API e frontend; Ctrl+C derruba os três
+STOP_INFRA=1 ./run.sh     # também derruba os containers ao sair
+```
+
+Os passos abaixo são o mesmo, feito à mão.
+
 ### Infraestrutura
 
 ```bash
@@ -72,17 +81,40 @@ O Vite faz proxy de `/api` para `localhost:8080`, então não é preciso configu
 | `/cardapio` | Cardápio e carrinho |
 | `/pagamento/:orderId` | Pagamento PIX |
 | `/confirmacao/:orderId` | Confirmação do pedido |
+| `/admin/login` | Login do painel |
+| `/admin/pedidos` | Pedidos: filtro por status, confirmação manual, sincronização e cancelamento |
+| `/admin/produtos` | Produtos: cadastro, edição, imagem e remoção |
+| `/admin/despesas` | Despesas e meta de arrecadação |
+| `/admin/usuarios` | Gestão de admins |
 
 > O QR Code fixo da sala precisa apontar para `/cardapio`, e não para a raiz —
 > a raiz é o portal de transparência.
+
+## Deploy da API
+
+O `api/Dockerfile` já ativa o perfil `prod` e usa a porta injetada pela plataforma
+(`PORT`). O contexto de build é a pasta `api/`, então configure o diretório raiz do
+serviço como `api` no Render ou no Railway.
+
+O `DATABASE_URL` pode vir tanto como URL JDBC quanto no formato que essas plataformas
+realmente entregam (`postgres://usuario:senha@host:porta/banco`) — a aplicação converte.
+As demais variáveis precisam ser definidas manualmente, e sem elas a API não sobe:
+
+| Variável | Para quê |
+|---|---|
+| `APP_JWT_SECRET` | Assinatura dos tokens do painel; não tem padrão |
+| `APP_PAYMENTS_PROVIDER` | Precisa ser `mercadopago` em produção |
+| `APP_MERCADOPAGO_ACCESS_TOKEN` / `APP_MERCADOPAGO_WEBHOOK_SECRET` | Credenciais do PIX |
+| `APP_STORAGE_*` | Bucket das imagens; o padrão aponta para o MinIO local |
+| `APP_CORS_ORIGINS` | Origem do frontend publicado |
 
 ## Estrutura do repositório
 
 ```
 .
-├── api/     # API Spring Boot
-├── ui/      # Aplicação React
-├── docs/    # Especificações e planos de implementação
+├── api/       # API Spring Boot
+├── ui/        # Aplicação React
+├── run.sh     # Sobe o stack inteiro localmente
 └── README.md
 ```
 

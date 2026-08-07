@@ -17,8 +17,10 @@ export APP_BOOTSTRAP_ADMIN_EMAIL APP_BOOTSTRAP_ADMIN_PASSWORD
 
 if command -v podman >/dev/null 2>&1; then
   COMPOSE="podman compose"
+  ENGINE="podman"
 elif command -v docker >/dev/null 2>&1; then
   COMPOSE="docker compose"
+  ENGINE="docker"
 else
   echo "Need podman or docker installed." >&2
   exit 1
@@ -52,24 +54,46 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "==> Starting infrastructure (Postgres, MinIO)..."
+step() { echo "==> [${SECONDS}s] $1"; }
+
+step "Starting infrastructure (Postgres, MinIO)..."
 (cd "$ROOT_DIR" && $COMPOSE up -d)
 
-echo "==> Waiting for Postgres and MinIO to be healthy..."
-for i in $(seq 1 30); do
-  PG_STATUS=$($COMPOSE ps postgres --format '{{.Health}}' 2>/dev/null || echo "")
-  MINIO_STATUS=$($COMPOSE ps minio --format '{{.Health}}' 2>/dev/null || echo "")
-  if [ "$PG_STATUS" = "healthy" ] && [ "$MINIO_STATUS" = "healthy" ]; then
+# Asking compose for a single service's health is not portable — podman-compose rejects
+# `ps <service>` outright, which used to make this loop fail every iteration and burn its
+# whole timeout on every run. Container ids plus an engine-level inspect work on both.
+all_containers_healthy() {
+  local ids id status
+  ids=$($COMPOSE ps -q 2>/dev/null) || return 1
+  [ -n "$ids" ] || return 1
+  for id in $ids; do
+    # minio-init has no healthcheck and exits once the bucket exists; nothing to wait for.
+    status=$($ENGINE inspect --format \
+      '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id" 2>/dev/null) || return 1
+    case "$status" in
+      healthy | none) ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
+step "Waiting for Postgres and MinIO to be healthy..."
+for i in $(seq 1 60); do
+  if all_containers_healthy; then
     break
   fi
-  sleep 2
+  if [ "$i" -eq 60 ]; then
+    echo "Infrastructure never reported healthy. Check '$COMPOSE ps'." >&2
+    exit 1
+  fi
+  sleep 1
 done
 
-echo "==> Starting the API (dev profile) — log: $API_LOG"
+step "Starting the API (dev profile) — log: $API_LOG"
 setsid bash -c "cd '$ROOT_DIR/api' && exec ./mvnw -ntp spring-boot:run -Dspring-boot.run.profiles=dev" >"$API_LOG" 2>&1 &
 API_PID=$!
 
-echo "==> Waiting for the API on :8080..."
+step "Waiting for the API on :8080..."
 for i in $(seq 1 60); do
   if curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/public/products 2>/dev/null | grep -q '^200$'; then
     break
@@ -82,7 +106,7 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-echo "==> Starting the frontend (Vite) — log: $UI_LOG"
+step "Starting the frontend (Vite) — log: $UI_LOG"
 if [ ! -d "$ROOT_DIR/ui/node_modules" ]; then
   echo "    (first run: installing UI dependencies)"
   (cd "$ROOT_DIR/ui" && npm install)
@@ -90,7 +114,7 @@ fi
 setsid bash -c "cd '$ROOT_DIR/ui' && exec npm run dev -- --port 5173 --strictPort" >"$UI_LOG" 2>&1 &
 UI_PID=$!
 
-echo "==> Waiting for the frontend on :5173..."
+step "Waiting for the frontend on :5173..."
 for i in $(seq 1 30); do
   if curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/ 2>/dev/null | grep -q '^200$'; then
     break
@@ -102,6 +126,8 @@ for i in $(seq 1 30); do
   fi
   sleep 1
 done
+
+step "Ready."
 
 cat <<EOF
 
