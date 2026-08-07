@@ -4787,6 +4787,8 @@ git commit -m "feat(api): add order creation with server-side totals and idempot
 ```java
 package com.example.localhostfacom.order;
 
+import com.example.localhostfacom.admin.Admin;
+import com.example.localhostfacom.admin.AdminRepository;
 import com.example.localhostfacom.order.dto.CreateOrderRequest;
 import com.example.localhostfacom.payment.PaymentStatus;
 import com.example.localhostfacom.product.Product;
@@ -4811,6 +4813,7 @@ class PaymentConfirmationTest {
     @Autowired private OrderRepository orders;
     @Autowired private ProductService productService;
     @Autowired private ProductRepository products;
+    @Autowired private AdminRepository admins;
 
     private Product coffee;
 
@@ -4818,6 +4821,7 @@ class PaymentConfirmationTest {
     void setUp() {
         orders.deleteAll();
         products.deleteAll();
+        admins.deleteAll();
         coffee = productService.create("Café", new BigDecimal("3.50"), null);
     }
 
@@ -4880,7 +4884,9 @@ class PaymentConfirmationTest {
     @Test
     void recordsWhichAdminConfirmedAPaymentByHand() {
         Order order = newOrder();
-        UUID adminId = UUID.randomUUID();
+        // orders.paid_manually_by has a real FK to admin(id) — a bare random UUID
+        // violates the constraint, so this needs an admin row that actually exists.
+        UUID adminId = admins.save(Admin.create("owner@example.com", "hash")).getId();
 
         service.markPaid(order.getId(), adminId);
 
