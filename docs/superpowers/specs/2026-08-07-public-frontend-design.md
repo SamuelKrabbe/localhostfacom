@@ -42,6 +42,7 @@ as visual reference rather than as code to preserve.
 | Visual direction | Clean light base, monospace numerals, purple accent | Leans into the `localhost:facom` port-number joke without making money figures hard to read. |
 | Cart state | React context, mirrored to `localStorage` | The PIX flow requires leaving the tab for a bank app. Losing the cart on return is a real failure, not an edge case. |
 | Order identity | Order id in the URL | Refresh- and share-safe without putting charge data in state. |
+| Root route | `/` is the transparency dashboard | The dashboard is the project's public, shareable face. The catalog is reached by scanning a QR code, where the URL is never read. |
 | Scope split | Public flow now, admin panel next | Nine screens with a full restyle is too large for one reviewable plan. |
 
 ### On the accent color
@@ -117,9 +118,24 @@ Each unit has one job and a stated dependency direction: `pages` compose `compon
 `components` read from `cart` and `lib`, nothing imports upward, and only `pages` call
 `api`.
 
+### Routes
+
+| Path | Screen |
+|---|---|
+| `/` | Public transparency dashboard |
+| `/cardapio` | Catalog and cart |
+| `/pagamento/:orderId` | PIX payment |
+| `/confirmacao/:orderId` | Confirmation receipt |
+| `*` | Redirect to `/` |
+
+**The physical QR code in the room must encode `/cardapio`, not the bare domain.** A QR
+pointing at `/` drops customers on the dashboard instead of the menu. This is the one
+decision here with a consequence outside the codebase — it needs to be right before
+anything is printed and taped to a wall.
+
 ## Screens
 
-### `/` — Catalog
+### `/cardapio` — Catalog
 
 Lists active products from `listProducts()`. Each row is a `ProductCard` with a quantity
 stepper. A sticky `CartBar` shows item count and total, and is the only way to check out.
@@ -158,7 +174,7 @@ the public API surface. If the snapshot is missing (different device, cleared st
 the page still confirms the payment and simply omits the itemized list. Snapshots are
 pruned on read once older than 24 hours.
 
-### `/transparencia` — Public dashboard
+### `/` — Public dashboard
 
 Rebuilds the existing dashboard against `getDashboard(page, size)`: KPI tiles, a
 seven-day revenue bar chart, the funding goal with its progress bar, and a paginated
@@ -209,7 +225,7 @@ Verification per task:
 
 The full customer path is exercised end to end at least once: catalog, add items, create
 order, PIX screen, mark the order paid out of band, confirm the poll advances to the
-confirmation screen, and confirm the sale appears on `/transparencia`. The `fake` payment
+confirmation screen, and confirm the sale appears on the dashboard at `/`. The `fake` payment
 provider makes this runnable with no Mercado Pago credentials.
 
 ## Risks
