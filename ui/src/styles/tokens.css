@@ -1,4 +1,6 @@
 :root {
+  color-scheme: light dark;
+
   /* Surfaces. A warm off-white rather than pure white — this is a room, not a bank. */
   --color-bg: #fafaf9;
   --color-surface: #ffffff;
@@ -45,4 +47,28 @@
   /* Phone-first content column; the dashboard opts into the wider one. */
   --width-content: 34rem;
   --width-wide: 64rem;
+
+  --bottom-nav-height: 3.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #16130f;
+    --color-surface: #292524;
+    --color-surface-sunken: #1c1917;
+    --color-border: #44403c;
+
+    --color-text: #fafaf9;
+    --color-text-muted: #a8a29e;
+
+    --color-accent: #a78bfa;
+    --color-accent-hover: #c4b5fd;
+    --color-accent-weak: #2e1f4d;
+
+    --color-positive: #4ade80;
+    --color-negative: #f87171;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-up: 0 -2px 8px rgba(0, 0, 0, 0.5);
+  }
 }

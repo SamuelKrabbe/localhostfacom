@@ -54,3 +54,10 @@ a {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Room for the fixed bottom tab bar (AppHeader's top nav hides at this width). */
+@media (max-width: 640px) {
+  #root {
+    padding-bottom: var(--bottom-nav-height);
+  }
+}
