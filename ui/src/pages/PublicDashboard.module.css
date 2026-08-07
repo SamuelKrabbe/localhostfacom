@@ -91,6 +91,13 @@
   gap: var(--space-5);
 }
 
+/* A grid track sizes to its content by default. Recharts' ResponsiveContainer measures
+   that track, so without this the chart can only ever grow it, never shrink it, and the
+   whole page scrolls sideways. */
+.grid > * {
+  min-width: 0;
+}
+
 @media (min-width: 60rem) {
   .grid {
     grid-template-columns: 1fr 1fr;
