@@ -228,6 +228,14 @@ In `api/pom.xml`, inside `<dependencies>`, add:
     <artifactId>thumbnailator</artifactId>
     <version>0.4.20</version>
 </dependency>
+<!-- Added in Task 7 (not part of the original Task 1 dependency set): registers a WebP
+     ImageIO reader via SPI, since phone uploads (Android/Google Photos) sometimes arrive
+     in that format and the stock JDK cannot decode it. -->
+<dependency>
+    <groupId>com.twelvemonkeys.imageio</groupId>
+    <artifactId>imageio-webp</artifactId>
+    <version>3.13.1</version>
+</dependency>
 <dependency>
     <groupId>com.google.zxing</groupId>
     <artifactId>core</artifactId>
@@ -2997,7 +3005,7 @@ public class ImageProcessor {
 }
 ```
 
-Note on formats: the accepted set is whatever `ImageIO` can actually read — JPEG, PNG, GIF and BMP on a stock JDK. **WebP is not readable without an extra plugin**, so a WebP upload is refused with `unsupported-image` rather than failing obscurely. If WebP support is wanted later, add a `TwelveMonkeys` or `webp-imageio` reader to the classpath; no code change is needed, because the check asks `ImageIO` rather than hard-coding a list.
+Note on formats: the accepted set is whatever `ImageIO` can actually read. Stock JDK covers JPEG, PNG, GIF and BMP. Uploads come mostly from phone cameras, so WebP support (Android/Google Photos) was added via the `com.twelvemonkeys.imageio:imageio-webp` dependency in `pom.xml` — it registers itself via SPI, so no code in `ImageProcessor` references WebP directly; `ImageProcessorTest.registersAWebpReaderSoAndroidPhotosAreAccepted` confirms the reader is picked up. HEIC (the iPhone default) is deliberately **not** supported — there is no pure-Java decoder, only native-library options (e.g. libheif via JNI), which was ruled out to avoid a native dependency in the deployment. iPhone users need "Settings > Camera > Formats > Most Compatible" (saves JPEG), or rely on their browser/OS converting HEIC to JPEG on upload, which most mobile browsers already do by default in a file picker. An unrecognized format is still refused with `unsupported-image`.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
