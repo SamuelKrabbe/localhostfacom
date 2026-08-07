@@ -1,3 +1,47 @@
 spring:
   application:
     name: localhostfacom
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 8MB
+
+app:
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
+  jwt:
+    secret: ${APP_JWT_SECRET}
+    ttl: PT12H
+  bootstrap-admin:
+    email: ${APP_BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
+  payments:
+    active-provider: ${APP_PAYMENTS_PROVIDER:fake}
+    order-ttl: PT10M
+    mercado-pago:
+      access-token: ${APP_MERCADOPAGO_ACCESS_TOKEN:}
+      webhook-secret: ${APP_MERCADOPAGO_WEBHOOK_SECRET:}
+      base-url: https://api.mercadopago.com
+    fake:
+      auto-confirm-after: PT10S
+  storage:
+    endpoint: ${APP_STORAGE_ENDPOINT:http://localhost:9000}
+    region: ${APP_STORAGE_REGION:auto}
+    bucket: ${APP_STORAGE_BUCKET:localhostfacom}
+    access-key: ${APP_STORAGE_ACCESS_KEY:minioadmin}
+    secret-key: ${APP_STORAGE_SECRET_KEY:minioadmin}
+    public-base-url: ${APP_STORAGE_PUBLIC_BASE_URL:http://localhost:9000/localhostfacom}
+    path-style: ${APP_STORAGE_PATH_STYLE:true}
+
+logging:
+  level:
+    com.example.localhostfacom: INFO

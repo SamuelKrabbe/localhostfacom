@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:localhostfacom;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+app:
+  jwt:
+    secret: test-secret-that-is-long-enough-for-hs256
+  payments:
+    active-provider: fake
+  storage:
+    public-base-url: http://storage.test/localhostfacom

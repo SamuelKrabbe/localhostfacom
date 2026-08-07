@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/localhostfacom
+    username: localhostfacom
+    password: localhostfacom
+
+app:
+  jwt:
+    secret: dev-only-secret-not-for-production-use-32b
+
+logging:
+  level:
+    com.example.localhostfacom: DEBUG

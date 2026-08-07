@@ -193,8 +193,10 @@ In `api/pom.xml`, inside `<dependencies>`, add:
 
 ```xml
 <dependency>
-    <groupId>org.flywaydb</groupId>
-    <artifactId>flyway-core</artifactId>
+    <!-- Boot 4 split FlywayAutoConfiguration out of flyway-core into this starter;
+         flyway-core alone no longer triggers migrations on startup. -->
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-flyway</artifactId>
 </dependency>
 <dependency>
     <groupId>org.flywaydb</groupId>
@@ -241,11 +243,8 @@ In `api/pom.xml`, inside `<dependencies>`, add:
     <artifactId>h2</artifactId>
     <scope>test</scope>
 </dependency>
-<dependency>
-    <groupId>org.flywaydb</groupId>
-    <artifactId>flyway-database-h2</artifactId>
-    <scope>test</scope>
-</dependency>
+<!-- No flyway-database-h2 artifact exists: H2 support ships inside flyway-core itself,
+     unlike PostgreSQL, which needs the separate module above. -->
 ```
 
 Add a `<dependencyManagement>` block before `<dependencies>` so the AWS SDK version is managed centrally:
