@@ -27,13 +27,28 @@ fi
 API_PID=""
 UI_PID=""
 
+STOP_INFRA="${STOP_INFRA:-0}"
+
+# Killing the PID alone would only reap the wrapper shell and orphan the real java/node
+# child, leaving :8080 and :5173 held. setsid puts each in its own process group so the
+# whole tree can be signalled at once.
+kill_group() {
+  [ -n "$1" ] || return 0
+  kill -TERM "-$1" 2>/dev/null || true
+}
+
 cleanup() {
   echo
   echo "Stopping..."
-  [ -n "$UI_PID" ] && kill "$UI_PID" 2>/dev/null || true
-  [ -n "$API_PID" ] && kill "$API_PID" 2>/dev/null || true
+  kill_group "$UI_PID"
+  kill_group "$API_PID"
   wait 2>/dev/null || true
-  echo "Stopped. Infra containers (postgres/minio) are left running — 'podman compose down' to stop them too."
+  if [ "$STOP_INFRA" = "1" ]; then
+    (cd "$ROOT_DIR" && $COMPOSE down)
+    echo "Stopped, infra containers included."
+  else
+    echo "Stopped. Infra containers (postgres/minio) are still up — run with STOP_INFRA=1 to take them down too, or 'podman compose down'."
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -51,7 +66,7 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Starting the API (dev profile) — log: $API_LOG"
-(cd "$ROOT_DIR/api" && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev >"$API_LOG" 2>&1) &
+setsid bash -c "cd '$ROOT_DIR/api' && exec ./mvnw -ntp spring-boot:run -Dspring-boot.run.profiles=dev" >"$API_LOG" 2>&1 &
 API_PID=$!
 
 echo "==> Waiting for the API on :8080..."
@@ -72,7 +87,7 @@ if [ ! -d "$ROOT_DIR/ui/node_modules" ]; then
   echo "    (first run: installing UI dependencies)"
   (cd "$ROOT_DIR/ui" && npm install)
 fi
-(cd "$ROOT_DIR/ui" && npm run dev -- --port 5173 --strictPort >"$UI_LOG" 2>&1) &
+setsid bash -c "cd '$ROOT_DIR/ui' && exec npm run dev -- --port 5173 --strictPort" >"$UI_LOG" 2>&1 &
 UI_PID=$!
 
 echo "==> Waiting for the frontend on :5173..."
