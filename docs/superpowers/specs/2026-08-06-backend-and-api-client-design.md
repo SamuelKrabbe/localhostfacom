@@ -43,8 +43,11 @@ hex, unique), `created_at`.
 
 **`orders`** — `id`, `status`, `total NUMERIC(12,2)`, `payment_provider`,
 `provider_payment_id`, `payment_payload`, `payment_qr_base64`, `payment_checkout_url`,
-`last_status_check_at`, `created_at`, `expires_at`, `paid_at`,
-`paid_manually_by` FK → `admin` null.
+`created_at`, `expires_at`, `paid_at`, `paid_manually_by` FK → `admin` null.
+`expires_at` is the **single source of truth for expiry**: the provider charge is created
+with its expiry derived from this column, never computed separately. Two independently
+computed deadlines would drift, leaving the reconciler expiring an order the provider
+would still honour, or the reverse.
 The payment columns are named generically rather than `pix_*`, so a future non-PIX
 provider stores its charge in the same place.
 Status is `PENDING | PAID | EXPIRED | CANCELED`.
@@ -60,9 +63,13 @@ recorded value of a past sale — that is the core transparency requirement.
 **`settings`** — single row enforced by `id SMALLINT PRIMARY KEY CHECK (id = 1)`:
 `goal_target`, `crowdfunding_url`, `updated_at`. Seeded by the migration.
 
-**`webhook_event`** — `id`, `provider`, `provider_event_id` **unique**, `payload TEXT`,
-`received_at`, `processed_at`, `error`. The unique constraint is the idempotency
-mechanism: a duplicate delivery hits it and is acknowledged without reprocessing.
+**`webhook_event`** — `id`, `provider`, `provider_event_id`, `provider_payment_id`,
+`payload TEXT`, `received_at`, `processed_at`, `error`. This is an **audit log**, not the
+idempotency mechanism. Mercado Pago issues a fresh notification `id` on each retry of the
+same payment event, so a unique constraint on `provider_event_id` would only catch an
+exact redelivery and would silently miss the common retry case. Real idempotency lives in
+`OrderService.markPaid`, which is guarded by a row lock and a status check. The table
+carries a non-unique index on `(provider, provider_payment_id)` for tracing.
 
 ## Payment provider abstraction
 
@@ -165,19 +172,30 @@ Upload limits: 8 MB request cap, and an allowlist of `image/jpeg`, `image/png`,
 - `POST /api/public/orders` — body is `{ items: [{ productId, quantity }] }` and nothing
   more. The total is computed server-side from current DB prices; any price in the
   request is ignored. Rejects inactive or unknown products, empty carts, and quantities
-  outside 1..99. Creates the order, calls the active provider, returns
-  `{ orderId, payload, qrImageBase64, total, expiresAt }`.
+  outside 1..99. Returns `{ orderId, payload, qrImageBase64, total, expiresAt }`.
+
+  **The provider call happens outside the database transaction.** The order is persisted
+  as `PENDING` with its `expires_at` and committed first; only then is the provider
+  called, and the resulting charge is written in a second transaction. Doing both in one
+  transaction would hold a database transaction open for the duration of an external HTTP
+  call, and a failure after the provider had already created the charge would roll the
+  order away while a real payable charge existed in the wild. With the split, a provider
+  failure leaves a recoverable `PENDING` order with no charge, which `/sync` can retry.
+  The committed order id doubles as the provider idempotency key.
 - `GET /api/public/orders/{id}/status` — returns `{ status, paidAt }`. If the order is
   `PENDING` and was last checked more than 10 seconds ago, it queries the provider
-  inline before answering. This is the first webhook fallback.
+  inline before answering. This is the first webhook fallback. The throttle timestamp is
+  held in memory rather than written to `orders` on every poll: the payment screen polls
+  every three seconds, and persisting each one would mean a database write per poll per
+  open checkout for no benefit.
 - `GET /api/public/dashboard?page=&size=` — see below.
 
 ### Webhooks
 
 - `POST /api/webhooks/{provider}` — resolves the provider from the registry, calls
-  `parseAndVerify`, and returns 401 on failure. Records the event, then applies it inside
-  a transaction. Always returns 200 for a duplicate `provider_event_id` so the provider
-  stops retrying.
+  `parseAndVerify`, and returns 401 on failure. Records the event in `webhook_event`,
+  then applies it through `markPaid`. A repeat delivery of an already-applied event is a
+  no-op that still returns 200, so the provider stops retrying.
 
 ### Admin — JWT
 
@@ -227,6 +245,12 @@ chartData:    last 7 days, one bucket per day, zero-filled
 transactions: page of paid orders; productNames rendered "2x Café, 1x Bolo"
 ```
 
+The `id` on each public transaction is a per-page row key, **not** the order UUID. The
+order UUID is the unguessable handle for `GET /api/public/orders/{id}/status`, and
+publishing every one of them on an open dashboard would hand out that handle for free.
+Nothing sensitive leaks today — the status of an already-paid order is all a caller would
+learn — but the transparency feed has no reason to expose an operational identifier.
+
 `goal.current` is **netBalance**, not gross, because the spec defines the caixa as
 arrecadado − despesas and the progress bar should reflect actual money on hand. Gross
 stays visible as its own KPI so nothing is hidden.
@@ -236,12 +260,37 @@ does not retroactively rewrite history.
 
 Day bucketing uses `America/Sao_Paulo`, otherwise an evening sale lands on the wrong day.
 
+### Empty and negative cases
+
+These are the day-one states, not edge cases, and the existing dashboard screen renders
+them badly today:
+
+- `averageTicket` is `0` when `totalOrders` is `0`, never a division by zero.
+- `topProduct` is `null` when nothing has sold. The UI renders a dash; it currently drops
+  the raw value into a `title` attribute.
+- **`netBalance` is negative whenever expenses exceed revenue**, which is the normal
+  state before the first sales, since stock is bought up front. The API reports the true
+  signed figure. `PublicDashboard.tsx:75` currently clamps only the upper bound
+  (`Math.min(..., 100)`), so a negative balance would render a negative bar width — the
+  progress percentage must be clamped to `0..100` while the KPI keeps showing the real
+  negative number. Hiding a deficit on a transparency dashboard would defeat its purpose.
+- **`goal_target` must be greater than zero.** The migration seeds a positive default and
+  `PUT /api/admin/settings` rejects anything else, because `PublicDashboard.tsx:75`
+  divides by it directly and a zero target yields `Infinity`.
+
 ## Security
 
 Stateless `SecurityFilterChain`. `JwtAuthenticationFilter` before
 `UsernamePasswordAuthenticationFilter`. HS256, secret from `APP_JWT_SECRET`, refused at
 startup if under 32 bytes. BCrypt for passwords. CSRF disabled (no cookies; the token is
 a bearer header). CORS origins from `app.cors.allowed-origins`.
+
+**The filter re-loads the admin from the database on every request and rejects the token
+if the row is missing or `active` is false.** A purely stateless token cannot be revoked,
+so a removed admin would keep full access until natural expiry — directly against the
+requirement that the role rotates and access is managed from inside the application. At
+this volume that check is one primary-key lookup per request, which is the right trade.
+Token lifetime is 12 hours.
 
 `/api/public/**`, `/api/auth/login` and `/api/webhooks/**` are `permitAll`;
 `/api/admin/**` requires authentication; everything else denies.
@@ -254,8 +303,14 @@ Admin management guards: an admin cannot delete themselves, and the last active 
 cannot be removed. Both would lock everyone out of a system whose whole point is that the
 role rotates.
 
-Order creation is rate-limited per IP (a bucket in memory, 10/minute) so an open,
-unauthenticated endpoint cannot be used to hammer the payment provider.
+Order creation is rate-limited per IP (10/minute) so an open, unauthenticated endpoint
+cannot be used to hammer the payment provider. The bucket is in process memory, so it is
+per instance and resets on deploy — a speed bump against accidents and casual abuse, not
+a real defence. Adequate for a single instance serving one room; if the deployment ever
+scales out, this needs to move to shared state.
+
+Login is rate-limited on the same mechanism (5/minute per IP) so the admin password is
+not open to unbounded guessing.
 
 ## Frontend — this pass only
 
@@ -277,15 +332,20 @@ drift is caught.
 - `ImageService` — dedup returns the existing row without re-uploading; a DB failure
   deletes the uploaded object; delete is refused while a product references the image.
 - `OrderService` — total is computed from DB prices and ignores anything client-sent;
-  inactive products are rejected; `markPaid` is idempotent across the three paths.
+  inactive products are rejected; `markPaid` is idempotent across the three paths; a
+  provider failure during creation leaves a recoverable `PENDING` order rather than
+  rolling it back.
 - `MercadoPagoPaymentProvider` — a known payload and secret produce a signature that
   verifies; a tampered body does not; a stale timestamp is refused.
-- Webhook controller — unsigned request gets 401 and writes nothing; duplicate event id
-  returns 200 without double-crediting.
+- Webhook controller — unsigned request gets 401 and writes nothing; **replaying the same
+  payment event under a fresh notification id credits the order exactly once**, which is
+  the retry shape Mercado Pago actually produces.
 - Dashboard — figures are computed from paid orders only, expenses subtract from
-  `netBalance`, chart days are zero-filled, `topProduct` uses the snapshot name.
+  `netBalance`, chart days are zero-filled, `topProduct` uses the snapshot name, and the
+  empty ledger returns zeroed KPIs with a null `topProduct` instead of dividing by zero.
 - Security — `/api/admin/**` is 401 without a token; expired and tampered tokens fail;
-  the last-admin and self-delete guards hold.
+  **a token belonging to a deactivated admin is rejected on the next request**; the
+  last-admin and self-delete guards hold.
 
 ## Infrastructure
 
