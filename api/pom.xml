@@ -97,6 +97,14 @@
 			<artifactId>thumbnailator</artifactId>
 			<version>0.4.20</version>
 		</dependency>
+		<!-- ImageIO has no built-in WebP reader; phone photos from Android/Google Photos
+		     sometimes arrive as WebP. This plugin registers itself via SPI, so ImageIO.read
+		     picks it up automatically with no code change. -->
+		<dependency>
+			<groupId>com.twelvemonkeys.imageio</groupId>
+			<artifactId>imageio-webp</artifactId>
+			<version>3.13.1</version>
+		</dependency>
 		<dependency>
 			<groupId>com.google.zxing</groupId>
 			<artifactId>core</artifactId>

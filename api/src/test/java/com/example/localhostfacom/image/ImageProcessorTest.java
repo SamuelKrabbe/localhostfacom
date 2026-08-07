@@ -77,6 +77,17 @@ class ImageProcessorTest {
                 .hasMessageContaining("Unsupported");
     }
 
+    /**
+     * WebP has no built-in ImageIO reader; phone photos from Android/Google Photos
+     * sometimes arrive in this format. The imageio-webp plugin registers itself via SPI,
+     * so this only needs to confirm ImageIO picked it up — no code in ImageProcessor
+     * references WebP directly.
+     */
+    @Test
+    void registersAWebpReaderSoAndroidPhotosAreAccepted() {
+        assertThat(ImageIO.getImageReadersBySuffix("webp").hasNext()).isTrue();
+    }
+
     @Test
     void rejectsAnImageWhoseDeclaredDimensionsAreAbsurd() throws Exception {
         // 9000 exceeds maxSourceDim, so it is refused from the header alone,
