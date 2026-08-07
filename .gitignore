@@ -48,3 +48,6 @@ logs/
 ### Banco de dados local (se usar Postgres via container com volume local) ###
 *.sql.bak
 pgdata/
+
+### Agent context ###
+CLAUDE.md
