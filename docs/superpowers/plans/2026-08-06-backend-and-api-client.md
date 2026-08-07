@@ -4706,7 +4706,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.ErrorResponseException;
 
 @RestController
 @RequestMapping("/api/public/orders")
@@ -4739,12 +4739,10 @@ public class PublicOrderController {
                     HttpStatus.BAD_GATEWAY, "Could not create the payment charge");
             problem.setProperty("slug", "charge-creation-failed");
             problem.setProperty("orderId", order.getId().toString());
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, problem.getDetail(), exception) {
-                @Override
-                public ProblemDetail getBody() {
-                    return problem;
-                }
-            };
+            // Boot 4 / Spring Framework 7 made ErrorResponseException.getBody() final, so
+            // the anonymous-subclass-override trick from older Spring no longer compiles.
+            // Use the constructor that takes a ProblemDetail directly instead.
+            throw new ErrorResponseException(HttpStatus.BAD_GATEWAY, problem, exception);
         }
     }
 
